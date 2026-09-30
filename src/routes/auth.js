@@ -198,11 +198,15 @@ r.post(
         verificationUploads: verificationFiles,
       });
       await sendSms(normalized, code, "registration");
-      res.json({
-        message: "OTP generated successfully",
-        registrationId: String(pending._id),
-        devOtp: process.env.NODE_ENV === "production" ? undefined : code,
-      });
+      // res.json({
+      //   message: "OTP generated successfully",
+      //   registrationId: String(pending._id),
+      //   devOtp: process.env.NODE_ENV === "production" ? undefined : code,
+      // });
+res.json({
+  message: "OTP generated successfully",
+  devOtp: code,
+});
     } catch (e) {
       res
         .status(500)
