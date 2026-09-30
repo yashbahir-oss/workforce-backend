@@ -15,7 +15,7 @@ import {
   publicUser,
 } from "../utils/auth.js";
 import { auth } from "../middleware/auth.js";
-
+//devOtp: process.env.NODE_ENV === "production" ? undefined : code,
 const r = Router();
 const otp = () => String(Math.floor(100000 + Math.random() * 900000));
 const normalizeMobile = (v = "") => {
@@ -364,10 +364,14 @@ r.post("/otp/request", async (req, res) => {
     );
     await u.save();
     await sendSms(u.mobile, code, "login");
-    res.json({
-      message: "OTP generated successfully",
-      devOtp: process.env.NODE_ENV === "production" ? undefined : code,
-    });
+    // res.json({
+    //   message: "OTP generated successfully",
+    //   devOtp: process.env.NODE_ENV === "production" ? undefined : code,
+    // });
+  res.json({
+  message: "OTP generated successfully",
+  devOtp: code,
+});
   } catch (e) {
     res.status(500).json({ message: e.message || "Unable to generate OTP" });
   }
@@ -433,10 +437,14 @@ r.post("/password/forgot", async (req, res) => {
     );
     await u.save();
     await sendSms(u.mobile, code, "password reset");
-    res.json({
-      message: "OTP generated successfully",
-      devOtp: process.env.NODE_ENV === "production" ? undefined : code,
-    });
+    // res.json({
+    //   message: "OTP generated successfully",
+    //   devOtp: process.env.NODE_ENV === "production" ? undefined : code,
+    // });
+  res.json({
+  message: "OTP generated successfully",
+  devOtp: code,
+});
   } catch (e) {
     res.status(500).json({ message: e.message || "Unable to send reset OTP" });
   }
