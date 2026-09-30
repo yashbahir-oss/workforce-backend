@@ -9,10 +9,44 @@ const r2 = useR2 ? new S3Client({ region: 'auto', endpoint: process.env.R2_ENDPO
 
 export async function putPrivate(buffer, contentType, originalName = 'file') {
   const key = `private/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${String(originalName).replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-  if (useR2) { await r2.send(new PutObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key, Body: buffer, ContentType: contentType })); return { key, provider: 'r2' }; }
-  await fs.mkdir(path.dirname(path.join(privateDir, key)), { recursive: true });
-  await fs.writeFile(path.join(privateDir, key), buffer);
-  return { key, provider: 'local' };
+  // if (useR2) { await r2.send(new PutObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key, Body: buffer, ContentType: contentType })); return { key, provider: 'r2' }; }
+  // await fs.mkdir(path.dirname(path.join(privateDir, key)), { recursive: true });
+  // await fs.writeFile(path.join(privateDir, key), buffer);
+  // return { key, provider: 'local' };
+
+  if (useR2) {
+  try {
+    await r2.send(
+      new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      }),
+    );
+
+    return { key, provider: 'r2' };
+  } catch (error) {
+    console.error('[R2 UPLOAD ERROR]', {
+      name: error?.name,
+      message: error?.message,
+      code: error?.Code,
+      statusCode: error?.$metadata?.httpStatusCode,
+      bucket: process.env.R2_BUCKET_NAME,
+      endpoint: process.env.R2_ENDPOINT,
+    });
+
+    throw error;
+  }
+}
+
+await fs.mkdir(path.dirname(path.join(privateDir, key)), {
+  recursive: true,
+});
+
+await fs.writeFile(path.join(privateDir, key), buffer);
+
+return { key, provider: 'local' };
 }
 export async function getPrivate(key) {
   if (useR2) return r2.send(new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }));
