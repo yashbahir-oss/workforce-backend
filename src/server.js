@@ -32,11 +32,27 @@ import { connectRedis, redisStatus, closeRedis } from './services/redis.js';
 
 const app=express();
 const server=http.createServer(app);
-const clientUrl=process.env.CLIENT_URL||'http://localhost:5173';
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'https://workforce-frontend-zeta.vercel.app',
+].filter(Boolean);
+// const clientUrl=process.env.CLIENT_URL||'http://localhost:5173';
 const logger=pino({level:process.env.LOG_LEVEL||'info'});
 app.set('trust proxy',1);
 app.use(helmet({crossOriginResourcePolicy:{policy:'cross-origin'}}));
-app.use(cors({origin:clientUrl,credentials:true,methods:['GET','POST','PUT','PATCH','DELETE','OPTIONS'],allowedHeaders:['Content-Type','Authorization']}));
+// app.use(cors({origin:clientUrl,credentials:true,methods:['GET','POST','PUT','PATCH','DELETE','OPTIONS'],allowedHeaders:['Content-Type','Authorization']}));
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked origin: ${origin}`));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(express.json({limit:'2mb'}));app.use(cookieParser());app.use(pinoHttp({logger}));
 app.use(rateLimit({windowMs:15*60*1000,max:Number(process.env.RATE_LIMIT_MAX||500),standardHeaders:true,legacyHeaders:false}));
 app.use('/api/auth',rateLimit({windowMs:15*60*1000,max:Number(process.env.AUTH_RATE_LIMIT_MAX||100)}));
@@ -56,8 +72,13 @@ app.use('/api/v1/notifications',notificationRoutes);app.use('/api/notifications'
 app.use('/api/v1/catalog',catalogRoutes);app.use('/api/catalog',catalogRoutes);
 
 app.use((err,req,res,next)=>{req.log?.error(err);const status=err?.status || (err?.code?.startsWith?.('LIMIT_') ? 400 : 500);res.status(status).json({message:err.message||'Internal server error'});});
-
-const io=new Server(server,{cors:{origin:clientUrl,credentials:true}});
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
+});
+// const io=new Server(server,{cors:{origin:clientUrl,credentials:true}});
 io.use(async(socket,next)=>{try{const token=socket.handshake.auth?.token||socket.handshake.headers?.authorization?.replace('Bearer ','');if(!token)return next(new Error('Authentication required'));const jwt=(await import('jsonwebtoken')).default;const payload=jwt.verify(token,process.env.JWT_SECRET);const user=await User.findById(payload.id).select('_id role status name');if(!user||user.status!=='active')return next(new Error('Invalid user'));socket.user=user;next();}catch(e){next(new Error('Invalid socket session'));}});
 io.on('connection',socket=>{socket.join(`user:${socket.user._id}`);socket.on('conversation:join',key=>{if(typeof key==='string'&&key.length<200)socket.join(`conversation:${key}`);});});setIO(io);
 
