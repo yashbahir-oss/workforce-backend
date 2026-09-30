@@ -1,0 +1,8 @@
+import { Router } from 'express';
+import AiConversation from '../models/AiConversation.js';
+import { auth } from '../middleware/auth.js';
+import { answerWorkGuide } from '../services/workguide.js';
+const r=Router();
+r.post('/',auth,async(req,res)=>{try{const message=String(req.body.message||'').trim();if(!message)return res.status(400).json({message:'Message is required'});const result=await answerWorkGuide(message,req.body.context||{});let conversation=await AiConversation.findOne({user:req.user._id}).sort({updatedAt:-1});if(!conversation)conversation=await AiConversation.create({user:req.user._id,messages:[]});conversation.messages.push({role:'user',content:message},{role:'assistant',content:result.answer});if(conversation.messages.length>30)conversation.messages=conversation.messages.slice(-30);await conversation.save();res.json({answer:result.answer,workers:result.workers?.map(w=>({id:w.user?._id,name:w.user?.name,profileImage:w.user?.profileImage||'',skills:w.skillNames,district:w.district,taluka:w.taluka,experienceYears:w.experienceYears,rating:w.ratingAverage,availability:w.availability}))||[],jobs:result.jobs?.map(j=>({id:j._id,title:j.title,description:j.description,categoryName:j.categoryName,skillNames:j.skillNames,district:j.district,taluka:j.taluka,locality:j.locality,date:j.date,workersNeeded:j.workersNeeded,customer:j.customer?.name||'Customer',imageUrl:j.imageKey?`/api/jobs/${j._id}/image`:''}))||[]});}catch(e){res.status(500).json({message:e.message||'WorkGuide is unavailable'});}});
+r.get('/history',auth,async(req,res)=>res.json({conversations:await AiConversation.find({user:req.user._id}).sort({updatedAt:-1}).limit(20)}));
+export default r;

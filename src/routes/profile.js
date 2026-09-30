@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import multer from 'multer';
+import { auth } from '../middleware/auth.js';
+import { publicUser } from '../utils/auth.js';
+import User from '../models/User.js';
+const r=Router();
+const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:3*1024*1024},fileFilter:(req,file,cb)=>cb(null,/^image\/(jpeg|png|webp)$/.test(file.mimetype))});
+r.post('/image',auth,upload.single('image'),async(req,res)=>{try{if(req.user.role==='worker'){const WorkerProfile=(await import('../models/WorkerProfile.js')).default;const wp=await WorkerProfile.findOne({user:req.user._id}).select('verificationStatus');if(wp?.verificationStatus!=='rejected')return res.status(403).json({message:'Worker profile photo is fixed to the signup selfie until verification is rejected'});}if(!req.file)return res.status(400).json({message:'Please upload JPG, PNG or WEBP image'});req.user.profileImageData=req.file.buffer;req.user.profileImageContentType=req.file.mimetype;req.user.profileImage=`/api/profile/image/${req.user._id}`;await req.user.save();res.json({user:publicUser(req.user)});}catch(e){res.status(500).json({message:e.message||'Profile image upload failed'});}});
+r.get('/image/:userId',async(req,res)=>{const u=await User.findById(req.params.userId).select('profileImageData profileImageContentType profileImage');if(!u)return res.status(404).end();if(u.profileImageData?.length){res.set('Content-Type',u.profileImageContentType||'image/jpeg');res.set('Cache-Control','public,max-age=86400');return res.send(u.profileImageData);}if(u.profileImage?.startsWith('/uploads/'))return res.redirect(u.profileImage);return res.status(404).end();});
+export default r;

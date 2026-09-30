@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import Review from '../models/Review.js';
+import Booking from '../models/Booking.js';
+import WorkerProfile from '../models/WorkerProfile.js';
+import { auth, customerOnly } from '../middleware/auth.js';
+import { notify } from '../services/notifications.js';
+const r=Router();
+r.post('/',auth,customerOnly,async(req,res)=>{try{const{bookingId,overall,workQuality,behaviour,punctuality,communication,text}=req.body;const b=await Booking.findOne({_id:bookingId,customer:req.user._id,status:'completed'});if(!b)return res.status(400).json({message:'Only completed bookings can be reviewed'});if(await Review.findOne({booking:b._id}))return res.status(409).json({message:'Review already submitted'});const review=await Review.create({booking:b._id,customer:req.user._id,worker:b.worker,overall,workQuality,behaviour,punctuality,communication,text});const stats=await Review.aggregate([{$match:{worker:b.worker}},{$group:{_id:null,avg:{$avg:'$overall'},count:{$sum:1}}}]);await WorkerProfile.updateOne({user:b.worker},{$set:{ratingAverage:Number((stats[0]?.avg||0).toFixed(2)),ratingCount:stats[0]?.count||0},$inc:{completedJobs:1}});await notify(b.worker,'New review',`${req.user.name} left you a review.`,'review','/worker/profile');res.status(201).json({review});}catch(e){res.status(500).json({message:e.message||'Review failed'});}});
+r.get('/worker/:workerId',async(req,res)=>res.json({reviews:await Review.find({worker:req.params.workerId}).populate('customer','name').sort({createdAt:-1}).limit(50)}));
+export default r;
